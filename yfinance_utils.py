@@ -142,9 +142,34 @@ def test_yfinance_connection():
         st.error("❌ 全てのETFで接続失敗")
         return False
 
+def calculate_period_summary_real(start_date, end_date):
+    """
+    分析期間全体での戦略概要を計算
+    
+    Args:
+        start_date (datetime): 分析開始日
+        end_date (datetime): 分析終了日
+    
+    Returns:
+        tuple: (期間概要, 分析期間文字列)
+    """
+    
+    period_info = f"{start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')}"
+    st.info(f"📊 分析期間全体での戦略概要を計算中: {period_info}")
+    
+    # 分析期間を表示用文字列に変換
+    period_display = f"{start_date.strftime('%Y/%m/%d')} ～ {end_date.strftime('%Y/%m/%d')}"
+    
+    # 簡易的な概要（実際のバックテストデータから詳細は取得）
+    strategy_summary = "分析期間全体でのトレード結果"
+    
+    st.success(f"✅ 分析期間設定完了: {period_display}")
+    
+    return strategy_summary, period_display
+
 def calculate_ief_momentum_real(start_date=None, end_date=None):
     """
-    実際のIEFデータを使用したモメンタム計算
+    実際のIEFデータを使用したモメンタム計算（最新推奨用）
     
     Args:
         start_date (datetime): 開始日（デフォルト: 60日前）
@@ -159,49 +184,28 @@ def calculate_ief_momentum_real(start_date=None, end_date=None):
     if start_date is None:
         start_date = end_date - timedelta(days=90)
     
-    # 最新の期間での計算のため、期間情報を表示
-    period_info = f"{start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')}"
-    st.info(f"📊 選択期間でIEFモメンタム計算中: {period_info}")
+    st.info("📊 最新IEFモメンタムを計算中...")
     
-    # IEFデータ取得（期間を拡張して十分なデータを確保）
-    extended_start = start_date - timedelta(days=60)  # 追加のマージン
-    ief_data = get_etf_data("IEF", extended_start, end_date)
+    # IEFデータ取得
+    ief_data = get_etf_data("IEF", start_date, end_date)
     
     if ief_data is None or len(ief_data) < 2:
-        st.error("❌ IEFデータが不足しています。サンプルデータを使用します。")
+        st.error("❌ IEFデータが不足しています。")
         return None, None, None
     
-    # ユーザー選択期間内でのデータを抽出
-    user_period_data = ief_data[(ief_data.index >= start_date) & (ief_data.index <= end_date)]
+    # 最新の2期間で1ヶ月リターン計算
+    latest_price = ief_data['Open'].iloc[-1]
+    previous_price = ief_data['Open'].iloc[-2]
     
-    if len(user_period_data) < 2:
-        # ユーザー期間内に十分なデータがない場合は最新データを使用
-        st.warning("⚠️ 選択期間内のデータが不足しています。利用可能な最新データで計算します。")
-        if len(ief_data) >= 2:
-            latest_price = ief_data['Open'].iloc[-1]
-            previous_price = ief_data['Open'].iloc[-2]
-            period_start = ief_data.index[-2]
-            period_end = ief_data.index[-1]
-        else:
-            st.error("❌ 利用可能なデータが不足しています。")
-            return None, None, None
-    else:
-        # 選択期間内の最後の2期間で計算
-        latest_price = user_period_data['Open'].iloc[-1]
-        previous_price = user_period_data['Open'].iloc[-2]
-        period_start = user_period_data.index[-2]
-        period_end = user_period_data.index[-1]
-    
-    # 1ヶ月リターン計算
     ief_return = ((latest_price - previous_price) / previous_price) * 100
     
     # 推奨銘柄判定
     recommended_etf = "TQQQ" if ief_return > 0 else "GLD"
     
-    # 期間文字列（実際に使用した期間を表示）
-    period = f"{period_start.strftime('%Y/%m/%d')} ～ {period_end.strftime('%Y/%m/%d')}"
+    # 期間文字列
+    period = f"{ief_data.index[-2].strftime('%Y/%m/%d')} ～ {ief_data.index[-1].strftime('%Y/%m/%d')}"
     
-    st.success(f"✅ リアルデータ取得完了: IEF {ief_return:+.2f}% → {recommended_etf}")
+    st.success(f"✅ 最新推奨: IEF {ief_return:+.2f}% → {recommended_etf}")
     
     return recommended_etf, ief_return, period
 

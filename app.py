@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from yfinance_utils import (
     test_yfinance_connection, 
     calculate_ief_momentum_real,
+    calculate_period_summary_real,
     get_etf_info
 )
 from backtest_yfinance import calculate_real_backtest
@@ -115,63 +116,79 @@ def main():
                 st.caption(f"用途: {info['use']}")
     
     # メインコンテンツ
-    # 1. 現在の推奨銘柄
-    st.header("🎯 現在の推奨銘柄")
+    # 1. 分析期間概要
+    st.header("📊 分析期間概要")
+    
+    # ユーザー選択期間の表示
+    start_datetime = datetime.combine(start_date, datetime.min.time())
+    end_datetime = datetime.combine(end_date, datetime.min.time())
+    analysis_period = f"{start_date.strftime('%Y/%m/%d')} ～ {end_date.strftime('%Y/%m/%d')}"
     
     # データソースに応じて処理を分岐
     if data_source == "🔴 リアルデータ（yfinance）":
-        # yfinanceを使用した推奨銘柄
         if st.session_state.get('yfinance_ok', False):
-            # ユーザー選択期間を使用してリアルタイム計算
-            start_datetime = datetime.combine(start_date, datetime.min.time())
-            end_datetime = datetime.combine(end_date, datetime.min.time())
-            
-            # デバッグ情報表示
-            st.info(f"🔍 ユーザー選択期間: {start_date} ～ {end_date}")
-            
-            recommended_etf, ief_return, period = calculate_ief_momentum_real(start_datetime, end_datetime)
-            
-            if recommended_etf is None:
-                st.error("リアルデータの取得に失敗しました。サンプルデータにフォールバックします。")
-                recommended_etf, ief_return, period = get_sample_momentum_signal()
+            # 分析期間概要を計算
+            strategy_summary, period = calculate_period_summary_real(start_datetime, end_datetime)
         else:
             st.warning("⚠️ yfinance接続テストを実行してください")
-            recommended_etf, ief_return, period = get_sample_momentum_signal()
+            strategy_summary = "サンプルデータでの概要"
+            period = analysis_period
     else:
         # サンプルデータを使用
-        recommended_etf, ief_return, period = get_sample_momentum_signal()
+        strategy_summary = "サンプルデータでの概要"
+        period = analysis_period
     
-    # 推奨銘柄表示
+    # 分析期間情報表示
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if recommended_etf == "TQQQ":
-            st.success(f"### 🚀 {recommended_etf}")
-            st.write("**ProShares UltraPro QQQ**")
-            st.write("NASDAQ 100 × 3倍レバレッジ")
-        else:
-            st.warning(f"### 🥇 {recommended_etf}")
-            st.write("**SPDR Gold Trust**")
-            st.write("金価格連動ETF")
+        st.info(f"""
+        **📅 分析期間**
+        
+        {period}
+        
+        この期間でのトレード戦略を分析
+        """)
     
     with col2:
-        delta_color = "normal" if ief_return > 0 else "inverse"
-        st.metric(
-            "IEF 1ヶ月リターン",
-            f"{ief_return:+.2f}%",
-            delta="モメンタム指標",
-            delta_color=delta_color
-        )
+        data_type = "リアルデータ" if data_source == "🔴 リアルデータ（yfinance）" else "サンプルデータ"
+        st.info(f"""
+        **📊 データソース**
+        
+        {data_type}
+        
+        3ヶ月リバランス戦略
+        """)
     
     with col3:
-        data_type = "リアルデータ" if data_source == "🔴 リアルデータ（yfinance）" else "サンプルデータ"
-        st.info(f"**判定期間**\n\n{period}\n\n**データ**: {data_type}")
+        st.info(f"""
+        **🎯 戦略概要**
+        
+        IEFモメンタム判定
+        
+        TQQQ ⇄ GLD 切り替え
+        """)
     
-    # 判定ロジックの説明
+    # 戦略説明
     st.info(f"""
-    **📊 判定ロジック**: IEF 1ヶ月リターンが **{ief_return:+.2f}%** → 
-    {'**正の値**なのでTQQQ（成長資産）を選択' if ief_return > 0 else '**負の値**なのでGLD（安全資産）を選択'}
+    **📊 戦略ロジック**: 選択した分析期間 **{period}** で3ヶ月ごとにリバランスしてトレードした結果を表示
     """)
+    
+    # 最新推奨銘柄セクション（現在の市況用）
+    if data_source == "🔴 リアルデータ（yfinance）" and st.session_state.get('yfinance_ok', False):
+        with st.expander("📈 現在の最新推奨銘柄 (参考)", expanded=False):
+            st.caption("分析期間とは別に、現在の市況での推奨銘柄")
+            current_etf, current_return, current_period = calculate_ief_momentum_real()
+            if current_etf:
+                col1, col2 = st.columns(2)
+                with col1:
+                    if current_etf == "TQQQ":
+                        st.success(f"🚀 {current_etf}")
+                    else:
+                        st.warning(f"🥇 {current_etf}")
+                with col2:
+                    st.metric("IEF リターン", f"{current_return:+.2f}%")
+                st.caption(f"判定期間: {current_period}")
     
     st.markdown("---")
     
