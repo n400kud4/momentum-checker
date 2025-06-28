@@ -84,49 +84,66 @@ def calculate_real_backtest(start_date, end_date):
     
     print(f"📅 分析期間: {common_dates[0].strftime('%Y-%m-%d')} ～ {common_dates[-1].strftime('%Y-%m-%d')}")
     
-    # バックテスト実行
+    # 正しい3ヶ月リバランス戦略でバックテスト実行
     results = []
+    current_position = None  # 現在のポジション
     
-    for i in range(len(common_dates) - 3):  # 3ヶ月保有のため-3
-        signal_date = common_dates[i]
-        start_date_period = common_dates[i + 1]  # 実際の保有開始
-        end_date_period = common_dates[i + 3]    # 3ヶ月後
+    # 3ヶ月ごとのリバランス（重複保有期間なし）
+    i = 1  # 前月データが必要なので1から開始
+    
+    while i < len(common_dates) - 2:  # 3ヶ月後データが必要
         
-        # IEFモメンタム信号計算
-        if i == 0:
-            # 最初の期間は前月データがないのでスキップ
-            continue
-            
-        ief_current = ief_data.loc[signal_date, 'Open']
-        ief_previous = ief_data.loc[common_dates[i-1], 'Open']
+        # リバランス判定日（3ヶ月期間の開始）
+        rebalance_date = common_dates[i]
+        
+        # IEF判定: 前月のパフォーマンス
+        ief_current = ief_data.loc[rebalance_date, 'Open']  # 今月初
+        ief_previous = ief_data.loc[common_dates[i-1], 'Open']  # 前月初
         ief_return = ((ief_current - ief_previous) / ief_previous) * 100
         
         # 推奨銘柄判定
         selected_etf = 'TQQQ' if ief_return > 0 else 'GLD'
         
+        # 3ヶ月保有期間設定
+        hold_start_date = rebalance_date  # リバランス日に売買
+        hold_end_date = common_dates[i + 2]  # 3ヶ月後（次のリバランス日）
+        
+        # アクション判定
+        if current_position == selected_etf:
+            action = "継続保有"
+        else:
+            action = f"{current_position or '初回'} → {selected_etf}"
+            current_position = selected_etf
+        
         # パフォーマンス計算
         if selected_etf == 'TQQQ':
-            start_price = tqqq_data.loc[start_date_period, 'Open']
-            end_price = tqqq_data.loc[end_date_period, 'Open']
+            start_price = tqqq_data.loc[hold_start_date, 'Open']  # 開始価格
+            end_price = tqqq_data.loc[hold_end_date, 'Open']      # 終了価格
         else:  # GLD
-            start_price = gld_data.loc[start_date_period, 'Open']
-            end_price = gld_data.loc[end_date_period, 'Open']
+            start_price = gld_data.loc[hold_start_date, 'Open']   # 開始価格
+            end_price = gld_data.loc[hold_end_date, 'Open']       # 終了価格
         
         return_pct = ((end_price - start_price) / start_price) * 100
         
         results.append({
-            'period': start_date_period.strftime('%Y/%m'),
-            'signal_date': signal_date.strftime('%Y/%m/%d'),
+            'period': f"{rebalance_date.strftime('%Y/%m')}",
+            'rebalance_date': rebalance_date.strftime('%Y/%m/%d'),
             'ief_signal': ief_return,
             'selected_etf': selected_etf,
+            'action': action,
             'start_price': start_price,
             'end_price': end_price,
             'return_pct': return_pct,
-            'start_date': start_date_period,
-            'end_date': end_date_period
+            'hold_start_date': hold_start_date,
+            'hold_end_date': hold_end_date,
+            'start_date': hold_start_date,  # 互換性のため
+            'end_date': hold_end_date      # 互換性のため
         })
         
-        print(f"   📈 {start_date_period.strftime('%Y/%m')}: IEF{ief_return:+.1f}% → {selected_etf} → {return_pct:+.1f}%")
+        print(f"   📈 {rebalance_date.strftime('%Y/%m')}: IEF{ief_return:+.1f}% → {selected_etf} ({action}) → {return_pct:+.1f}%")
+        
+        # 次のリバランスは3ヶ月後
+        i += 3
     
     if not results:
         print("❌ バックテスト結果が生成されませんでした")

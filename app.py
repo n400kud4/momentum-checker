@@ -231,18 +231,26 @@ def main():
     # 表示用データフレーム作成（3ヶ月期間ごとの成績）
     display_df = backtest_df.copy()
     
-    # 3ヶ月期間の表示
-    if 'start_date' in display_df.columns and 'end_date' in display_df.columns:
-        # リアルデータの場合（詳細な日付情報あり）
-        display_df['3ヶ月期間'] = display_df.apply(
-            lambda row: f"{row['start_date'].strftime('%Y/%m')} - {row['end_date'].strftime('%Y/%m')}", 
+    # リバランス期間の表示
+    if 'hold_start_date' in display_df.columns and 'hold_end_date' in display_df.columns:
+        # リアルデータの場合（詳細な保有期間情報あり）
+        display_df['リバランス月'] = display_df['hold_start_date'].apply(lambda x: x.strftime('%Y/%m'))
+        display_df['3ヶ月保有期間'] = display_df.apply(
+            lambda row: f"{row['hold_start_date'].strftime('%Y/%m/%d')} ～ {row['hold_end_date'].strftime('%Y/%m/%d')}", 
             axis=1
         )
+        # アクション情報があれば表示
+        if 'action' in display_df.columns:
+            display_df['売買アクション'] = display_df['action']
+        else:
+            display_df['売買アクション'] = "売買実行"
     else:
         # サンプルデータの場合
-        display_df['3ヶ月期間'] = display_df['period'].apply(
-            lambda x: f"{x} (3ヶ月間)"
+        display_df['リバランス月'] = display_df['period']
+        display_df['3ヶ月保有期間'] = display_df['period'].apply(
+            lambda x: f"{x} ～ 3ヶ月後"
         )
+        display_df['売買アクション'] = "売買実行"
     
     display_df['IEF信号(%)'] = display_df['ief_signal'].apply(lambda x: f"{x:+.1f}%")
     display_df['保有銘柄'] = display_df['selected_etf']
@@ -250,23 +258,43 @@ def main():
     display_df['終了価格'] = display_df['end_price'].apply(lambda x: f"${x:.2f}")
     display_df['3ヶ月成績'] = display_df['return_pct'].apply(lambda x: f"{x:+.1f}%")
     
-    # 3ヶ月期間ごとの成績テーブル表示
-    st.subheader("📈 3ヶ月期間ごとのトレード成績")
-    st.caption("各行が1回の3ヶ月間トレードの結果です")
+    # 3ヶ月リバランス戦略成績テーブル表示
+    st.subheader("📈 3ヶ月リバランス戦略成績")
+    st.caption("🔄 3ヶ月ごとにリバランス → 継続保有 or 銘柄変更")
     
     st.dataframe(
-        display_df[['3ヶ月期間', 'IEF信号(%)', '保有銘柄', '開始価格', '終了価格', '3ヶ月成績']],
+        display_df[['リバランス月', '3ヶ月保有期間', '売買アクション', 'IEF信号(%)', '保有銘柄', '開始価格', '終了価格', '3ヶ月成績']],
         use_container_width=True,
         hide_index=True,
         column_config={
-            "3ヶ月期間": st.column_config.TextColumn("🗓️ 3ヶ月保有期間", width="medium"),
+            "リバランス月": st.column_config.TextColumn("🗓️ リバランス月", width="small"),
+            "3ヶ月保有期間": st.column_config.TextColumn("📅 3ヶ月保有期間", width="large"),
+            "売買アクション": st.column_config.TextColumn("🔄 売買アクション", width="medium"),
             "IEF信号(%)": st.column_config.TextColumn("📊 IEF信号", width="small"),
             "保有銘柄": st.column_config.TextColumn("🎯 保有ETF", width="small"),
             "開始価格": st.column_config.TextColumn("💰 開始価格", width="small"),
             "終了価格": st.column_config.TextColumn("💰 終了価格", width="small"),
-            "3ヶ月成績": st.column_config.TextColumn("📈 3ヶ月成績", width="small")
+            "3ヶ月成績": st.column_config.TextColumn("📈 成績", width="small")
         }
     )
+    
+    # トレードルール説明
+    with st.expander("ℹ️ 3ヶ月リバランス戦略詳細"):
+        st.write("""
+        **🔄 3ヶ月リバランス戦略**
+        
+        1. **リバランス頻度**: 3ヶ月ごと（四半期ごと）
+        2. **判定方法**: IEFパフォーマンスで銘柄決定
+        3. **売買アクション**:
+           - **継続保有**: 前期間と同じ銘柄 → 売買しない
+           - **銘柄変更**: 異なる銘柄 → 売却 & 購入
+        4. **保有期間**: 各リバランス期間で3ヶ月間保有
+        
+        **例**: 
+        - 2024年1月: TQQQ保有開始
+        - 2024年4月: シグナル判定 → TQQQ継続 → 売買なし
+        - 2024年7月: シグナル判定 → GLD変更 → TQQQ売却・GLD購入
+        """)
     
     # 3. 3ヶ月トレード統計
     st.header("📊 3ヶ月トレード統計")
@@ -336,7 +364,7 @@ def main():
     st.subheader("📥 データエクスポート")
     
     # CSV用データフレーム準備
-    csv_df = display_df[['3ヶ月期間', 'IEF信号(%)', '保有銘柄', '開始価格', '終了価格', '3ヶ月成績']].copy()
+    csv_df = display_df[['リバランス月', '3ヶ月保有期間', '売買アクション', 'IEF信号(%)', '保有銘柄', '開始価格', '終了価格', '3ヶ月成績']].copy()
     csv_data = csv_df.to_csv(index=False, encoding='utf-8-sig')
     
     st.download_button(
