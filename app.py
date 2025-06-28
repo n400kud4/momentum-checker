@@ -97,6 +97,9 @@ def main():
         if recalculate:
             # キャッシュクリアして最新データで再計算
             st.cache_data.clear()
+            # セッション状態をクリアして確実に再計算
+            if 'last_calculation' in st.session_state:
+                del st.session_state['last_calculation']
             st.success("✅ 期間を更新しました！キャッシュもクリアして最新データで再計算します。")
             st.balloons()
             st.rerun()
@@ -122,6 +125,10 @@ def main():
             # ユーザー選択期間を使用してリアルタイム計算
             start_datetime = datetime.combine(start_date, datetime.min.time())
             end_datetime = datetime.combine(end_date, datetime.min.time())
+            
+            # デバッグ情報表示
+            st.info(f"🔍 ユーザー選択期間: {start_date} ～ {end_date}")
+            
             recommended_etf, ief_return, period = calculate_ief_momentum_real(start_datetime, end_datetime)
             
             if recommended_etf is None:

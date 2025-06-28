@@ -171,17 +171,35 @@ def calculate_ief_momentum_real(start_date=None, end_date=None):
         st.error("❌ IEFデータが不足しています。サンプルデータを使用します。")
         return None, None, None
     
-    # 1ヶ月リターン計算（最新 vs 前月）
-    latest_price = ief_data['Open'].iloc[-1]
-    previous_price = ief_data['Open'].iloc[-2]
+    # ユーザー選択期間内でのデータを抽出
+    user_period_data = ief_data[(ief_data.index >= start_date) & (ief_data.index <= end_date)]
     
+    if len(user_period_data) < 2:
+        # ユーザー期間内に十分なデータがない場合は最新データを使用
+        st.warning("⚠️ 選択期間内のデータが不足しています。利用可能な最新データで計算します。")
+        if len(ief_data) >= 2:
+            latest_price = ief_data['Open'].iloc[-1]
+            previous_price = ief_data['Open'].iloc[-2]
+            period_start = ief_data.index[-2]
+            period_end = ief_data.index[-1]
+        else:
+            st.error("❌ 利用可能なデータが不足しています。")
+            return None, None, None
+    else:
+        # 選択期間内の最後の2期間で計算
+        latest_price = user_period_data['Open'].iloc[-1]
+        previous_price = user_period_data['Open'].iloc[-2]
+        period_start = user_period_data.index[-2]
+        period_end = user_period_data.index[-1]
+    
+    # 1ヶ月リターン計算
     ief_return = ((latest_price - previous_price) / previous_price) * 100
     
     # 推奨銘柄判定
     recommended_etf = "TQQQ" if ief_return > 0 else "GLD"
     
-    # 期間文字列
-    period = f"{ief_data.index[-2].strftime('%Y/%m/%d')} ～ {ief_data.index[-1].strftime('%Y/%m/%d')}"
+    # 期間文字列（実際に使用した期間を表示）
+    period = f"{period_start.strftime('%Y/%m/%d')} ～ {period_end.strftime('%Y/%m/%d')}"
     
     st.success(f"✅ リアルデータ取得完了: IEF {ief_return:+.2f}% → {recommended_etf}")
     
