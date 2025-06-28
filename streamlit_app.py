@@ -6,6 +6,14 @@ from datetime import datetime, timedelta
 import time
 import plotly.express as px
 import plotly.graph_objects as go
+import warnings
+
+# 警告を抑制
+warnings.filterwarnings('ignore')
+
+# yfinanceのUser-Agent設定
+import requests
+requests.packages.urllib3.disable_warnings()
 
 st.set_page_config(
     page_title="ETF Momentum Checker",
@@ -18,20 +26,42 @@ st.set_page_config(
 def get_monthly_data(symbol, start_date, end_date):
     """ETFの月次データを取得"""
     try:
-        ticker = yf.Ticker(symbol)
-        data = ticker.history(start=start_date, end=end_date, interval="1mo")
-        
-        if data.empty:
-            return None
-            
-        # タイムゾーン正規化
-        if data.index.tz is not None:
-            data.index = data.index.tz_localize(None)
-            
-        return data
+        # リトライ機能付きでデータ取得
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                ticker = yf.Ticker(symbol)
+                data = ticker.history(
+                    start=start_date, 
+                    end=end_date, 
+                    interval="1mo",
+                    timeout=30,
+                    auto_adjust=True,
+                    prepost=False
+                )
+                
+                if data.empty:
+                    if attempt < max_retries - 1:
+                        time.sleep(2)
+                        continue
+                    return None
+                    
+                # タイムゾーン正規化
+                if data.index.tz is not None:
+                    data.index = data.index.tz_localize(None)
+                    
+                return data
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                else:
+                    st.error(f"❌ {symbol} データ取得エラー: {str(e)}")
+                    return None
         
     except Exception as e:
-        st.error(f"❌ {symbol} データ取得エラー: {str(e)}")
+        st.error(f"❌ {symbol} 予期しないエラー: {str(e)}")
         return None
 
 def calculate_momentum_signal():
