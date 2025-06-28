@@ -95,7 +95,9 @@ def main():
         recalculate = st.button("🔄 期間変更を反映", type="primary", use_container_width=True)
         
         if recalculate:
-            st.success("✅ 期間を更新しました！")
+            # キャッシュクリアして最新データで再計算
+            st.cache_data.clear()
+            st.success("✅ 期間を更新しました！キャッシュもクリアして最新データで再計算します。")
             st.balloons()
             st.rerun()
         
@@ -117,7 +119,10 @@ def main():
     if data_source == "🔴 リアルデータ（yfinance）":
         # yfinanceを使用した推奨銘柄
         if st.session_state.get('yfinance_ok', False):
-            recommended_etf, ief_return, period = calculate_ief_momentum_real()
+            # ユーザー選択期間を使用してリアルタイム計算
+            start_datetime = datetime.combine(start_date, datetime.min.time())
+            end_datetime = datetime.combine(end_date, datetime.min.time())
+            recommended_etf, ief_return, period = calculate_ief_momentum_real(start_datetime, end_datetime)
             
             if recommended_etf is None:
                 st.error("リアルデータの取得に失敗しました。サンプルデータにフォールバックします。")

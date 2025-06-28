@@ -13,7 +13,7 @@ import warnings
 # 警告を抑制
 warnings.filterwarnings('ignore')
 
-@st.cache_data(ttl=1800)  # 30分キャッシュ
+@st.cache_data(ttl=1800, show_spinner=False)  # 30分キャッシュ、期間変更に対応
 def get_etf_data(symbol, start_date, end_date, max_retries=3):
     """
     ETFの月次データを取得（yfinance使用）
@@ -159,10 +159,13 @@ def calculate_ief_momentum_real(start_date=None, end_date=None):
     if start_date is None:
         start_date = end_date - timedelta(days=90)
     
-    st.info("📊 リアルタイムIEFモメンタムを計算中...")
+    # 最新の期間での計算のため、期間情報を表示
+    period_info = f"{start_date.strftime('%Y-%m-%d')} ～ {end_date.strftime('%Y-%m-%d')}"
+    st.info(f"📊 選択期間でIEFモメンタム計算中: {period_info}")
     
-    # IEFデータ取得
-    ief_data = get_etf_data("IEF", start_date, end_date)
+    # IEFデータ取得（期間を拡張して十分なデータを確保）
+    extended_start = start_date - timedelta(days=60)  # 追加のマージン
+    ief_data = get_etf_data("IEF", extended_start, end_date)
     
     if ief_data is None or len(ief_data) < 2:
         st.error("❌ IEFデータが不足しています。サンプルデータを使用します。")
