@@ -12,7 +12,7 @@ from yfinance_utils import (
 from backtest_yfinance import calculate_real_backtest
 
 # 既存のサンプルデータ関数をインポート
-from app import get_sample_momentum_signal, get_sample_backtest_data
+from sample_data import get_sample_momentum_signal, get_sample_backtest_data
 
 # ページ設定
 st.set_page_config(
