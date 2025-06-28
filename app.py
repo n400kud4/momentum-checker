@@ -3,156 +3,55 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
+# yfinanceユーティリティをインポート
+from yfinance_utils import (
+    test_yfinance_connection, 
+    calculate_ief_momentum_real,
+    get_etf_info
+)
+from backtest_yfinance import calculate_real_backtest
+
+# 既存のサンプルデータ関数をインポート
+from app import get_sample_momentum_signal, get_sample_backtest_data
+
 # ページ設定
 st.set_page_config(
-    page_title="ETF Momentum Checker",
+    page_title="ETF Momentum Checker - yfinance版",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-def get_sample_momentum_signal():
-    """サンプルのモメンタムシグナル（後でyfinanceに置き換え）"""
-    # サンプルデータ：IEF 1ヶ月リターン
-    ief_return = 0.75  # +0.75%の例
-    recommended_etf = "TQQQ" if ief_return > 0 else "GLD"
-    period = "2024/11/01 ～ 2024/12/01"
-    
-    return recommended_etf, ief_return, period
-
-def get_sample_backtest_data(start_date, end_date):
-    """サンプルバックテストデータ（Core Strategy Logic に基づく）"""
-    # より多くのサンプルデータを用意
-    all_backtest_data = [
-        {
-            "period": "2022-01",
-            "date": datetime(2022, 1, 1),
-            "ief_signal": 0.8,
-            "selected_etf": "TQQQ",
-            "start_price": 38.20,
-            "end_price": 32.10,
-            "return_pct": -16.0
-        },
-        {
-            "period": "2022-04", 
-            "date": datetime(2022, 4, 1),
-            "ief_signal": -1.5,
-            "selected_etf": "GLD",
-            "start_price": 172.30,
-            "end_price": 177.80,
-            "return_pct": 3.2
-        },
-        {
-            "period": "2022-07",
-            "date": datetime(2022, 7, 1),
-            "ief_signal": 1.1,
-            "selected_etf": "TQQQ", 
-            "start_price": 22.90,
-            "end_price": 26.40,
-            "return_pct": 15.3
-        },
-        {
-            "period": "2022-10",
-            "date": datetime(2022, 10, 1),
-            "ief_signal": -0.7,
-            "selected_etf": "GLD",
-            "start_price": 165.50,
-            "end_price": 172.20,
-            "return_pct": 4.0
-        },
-        {
-            "period": "2023-01",
-            "date": datetime(2023, 1, 1),
-            "ief_signal": 1.2,  # IEF 1ヶ月リターン（正 → TQQQ選択）
-            "selected_etf": "TQQQ",
-            "start_price": 25.50,
-            "end_price": 32.10,
-            "return_pct": 25.9
-        },
-        {
-            "period": "2023-04", 
-            "date": datetime(2023, 4, 1),
-            "ief_signal": -0.8,  # IEF 1ヶ月リターン（負 → GLD選択）
-            "selected_etf": "GLD",
-            "start_price": 180.20,
-            "end_price": 175.80,
-            "return_pct": -2.4
-        },
-        {
-            "period": "2023-07",
-            "date": datetime(2023, 7, 1),
-            "ief_signal": 0.6,  # IEF 1ヶ月リターン（正 → TQQQ選択）
-            "selected_etf": "TQQQ", 
-            "start_price": 28.90,
-            "end_price": 31.40,
-            "return_pct": 8.7
-        },
-        {
-            "period": "2023-10",
-            "date": datetime(2023, 10, 1),
-            "ief_signal": -0.3,  # IEF 1ヶ月リターン（負 → GLD選択）
-            "selected_etf": "GLD",
-            "start_price": 185.50,
-            "end_price": 191.20,
-            "return_pct": 3.1
-        },
-        {
-            "period": "2024-01",
-            "date": datetime(2024, 1, 1),
-            "ief_signal": 1.5,  # IEF 1ヶ月リターン（正 → TQQQ選択）
-            "selected_etf": "TQQQ",
-            "start_price": 35.20,
-            "end_price": 42.80,
-            "return_pct": 21.6
-        },
-        {
-            "period": "2024-04",
-            "date": datetime(2024, 4, 1),
-            "ief_signal": -1.1,  # IEF 1ヶ月リターン（負 → GLD選択）
-            "selected_etf": "GLD",
-            "start_price": 195.30,
-            "end_price": 188.90,
-            "return_pct": -3.3
-        },
-        {
-            "period": "2024-07",
-            "date": datetime(2024, 7, 1),
-            "ief_signal": 0.9,
-            "selected_etf": "TQQQ",
-            "start_price": 44.20,
-            "end_price": 47.50,
-            "return_pct": 7.5
-        },
-        {
-            "period": "2024-10",
-            "date": datetime(2024, 10, 1),
-            "ief_signal": -0.4,
-            "selected_etf": "GLD",
-            "start_price": 192.10,
-            "end_price": 196.30,
-            "return_pct": 2.2
-        }
-    ]
-    
-    df = pd.DataFrame(all_backtest_data)
-    
-    # 指定期間でフィルタリング
-    start_date = pd.to_datetime(start_date)
-    end_date = pd.to_datetime(end_date)
-    
-    filtered_df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
-    
-    return filtered_df
-
 def main():
     # ヘッダー
-    st.title("📈 ETF Momentum Checker")
-    st.markdown("**IEFモメンタムに基づくTQQQ/GLD切り替え戦略**")
+    st.title("📈 ETF Momentum Checker - yfinance統合版")
+    st.markdown("**IEFモメンタムに基づくTQQQ/GLD切り替え戦略（リアルデータ対応）**")
     st.markdown("---")
     
     # サイドバー
     with st.sidebar:
-        st.header("⚙️ 戦略設定")
+        st.header("⚙️ データソース設定")
+        
+        # データソース選択
+        data_source = st.radio(
+            "📊 使用するデータ",
+            ["🔴 リアルデータ（yfinance）", "🔵 サンプルデータ"],
+            index=0
+        )
+        
+        st.markdown("---")
+        
+        # yfinance接続テスト
+        if data_source == "🔴 リアルデータ（yfinance）":
+            st.subheader("🧪 接続テスト")
+            if st.button("yfinance接続確認", use_container_width=True):
+                connection_ok = test_yfinance_connection()
+                if connection_ok:
+                    st.session_state['yfinance_ok'] = True
+                else:
+                    st.session_state['yfinance_ok'] = False
+        
+        st.markdown("---")
         
         # 戦略情報
         st.subheader("📋 Strategy Logic")
@@ -166,10 +65,20 @@ def main():
         
         # 期間設定
         st.subheader("📅 分析期間")
+        
+        if data_source == "🔴 リアルデータ（yfinance）":
+            # yfinanceの場合はより広い期間
+            min_date = datetime(2010, 3, 1)  # TQQQの開始日
+            default_start = datetime(2020, 1, 1)
+        else:
+            # サンプルデータの場合
+            min_date = datetime(2022, 1, 1)
+            default_start = datetime(2023, 1, 1)
+        
         start_date = st.date_input(
             "開始日",
-            value=datetime(2023, 1, 1),
-            min_value=datetime(2020, 1, 1),
+            value=default_start,
+            min_value=min_date,
             max_value=datetime.now()
         )
         end_date = st.date_input(
@@ -190,21 +99,37 @@ def main():
             st.balloons()
             st.rerun()
         
-        # データソース
-        st.subheader("📊 データソース")
-        st.write("🔹 **TQQQ**: 3倍レバレッジNASDAQ ETF")
-        st.write("🔹 **GLD**: ゴールド ETF")  
-        st.write("🔹 **IEF**: 中期米国債 ETF（判定指標）")
-        
+        # ETF情報
         st.markdown("---")
-        st.caption("現在はサンプルデータを表示")
+        st.subheader("📊 ETF情報")
+        
+        if st.button("ETF詳細を表示"):
+            etf_info = get_etf_info()
+            for symbol, info in etf_info.items():
+                st.write(f"**{symbol}**: {info['name']}")
+                st.caption(f"用途: {info['use']}")
     
     # メインコンテンツ
     # 1. 現在の推奨銘柄
     st.header("🎯 現在の推奨銘柄")
     
-    recommended_etf, ief_return, period = get_sample_momentum_signal()
+    # データソースに応じて処理を分岐
+    if data_source == "🔴 リアルデータ（yfinance）":
+        # yfinanceを使用した推奨銘柄
+        if st.session_state.get('yfinance_ok', False):
+            recommended_etf, ief_return, period = calculate_ief_momentum_real()
+            
+            if recommended_etf is None:
+                st.error("リアルデータの取得に失敗しました。サンプルデータにフォールバックします。")
+                recommended_etf, ief_return, period = get_sample_momentum_signal()
+        else:
+            st.warning("⚠️ yfinance接続テストを実行してください")
+            recommended_etf, ief_return, period = get_sample_momentum_signal()
+    else:
+        # サンプルデータを使用
+        recommended_etf, ief_return, period = get_sample_momentum_signal()
     
+    # 推奨銘柄表示
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -227,7 +152,8 @@ def main():
         )
     
     with col3:
-        st.info(f"**判定期間**\n\n{period}")
+        data_type = "リアルデータ" if data_source == "🔴 リアルデータ（yfinance）" else "サンプルデータ"
+        st.info(f"**判定期間**\n\n{period}\n\n**データ**: {data_type}")
     
     # 判定ロジックの説明
     st.info(f"""
@@ -240,13 +166,34 @@ def main():
     # 2. バックテスト結果
     st.header("📊 バックテスト結果（3ヶ月リバランス）")
     
-    # データ取得（期間でフィルタリング）
-    backtest_df = get_sample_backtest_data(start_date, end_date)
+    # データソースに応じてバックテスト実行
+    if data_source == "🔴 リアルデータ（yfinance）" and st.session_state.get('yfinance_ok', False):
+        st.info("🚀 リアルデータでバックテストを実行中...")
+        
+        # リアルデータでバックテスト
+        start_datetime = datetime.combine(start_date, datetime.min.time())
+        end_datetime = datetime.combine(end_date, datetime.min.time())
+        
+        backtest_df = calculate_real_backtest(start_datetime, end_datetime)
+        
+        if backtest_df is None:
+            st.error("❌ リアルデータでのバックテストに失敗しました。サンプルデータを表示します。")
+            backtest_df = get_sample_backtest_data(start_date, end_date)
+        else:
+            st.success(f"✅ リアルデータでバックテスト完了！ {len(backtest_df)}期間を分析")
+    else:
+        # サンプルデータでバックテスト
+        if data_source == "🔴 リアルデータ（yfinance）":
+            st.warning("⚠️ yfinance接続テストを先に実行してください")
+        backtest_df = get_sample_backtest_data(start_date, end_date)
     
     # 期間に該当するデータがない場合の処理
     if backtest_df.empty:
         st.warning(f"⚠️ 指定期間（{start_date} ～ {end_date}）にデータがありません。期間を調整してください。")
-        st.info("💡 利用可能期間: 2022年1月 ～ 2024年10月")
+        if data_source == "🔵 サンプルデータ":
+            st.info("💡 サンプルデータ利用可能期間: 2022年1月 ～ 2024年10月")
+        else:
+            st.info("💡 リアルデータ利用可能期間: 2010年3月 ～ 現在")
         return
     
     # 期間情報を表示
@@ -315,56 +262,25 @@ def main():
             delta="年率換算"
         )
     
-    # 4. 戦略の詳細説明
-    st.markdown("---")
-    st.header("💡 戦略の仕組み")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🔄 リバランス周期")
-        st.write("""
-        **3ヶ月ごとにポジション見直し**
-        - 各期間開始時にIEFの1ヶ月リターンを計算
-        - 正の場合：TQQQ（攻撃的成長）
-        - 負の場合：GLD（守備的安全）
-        - 3ヶ月間はポジション維持
-        """)
-    
-    with col2:
-        st.subheader("📊 判定指標")
-        st.write("""
-        **IEF（中期米国債ETF）をモメンタム指標として使用**
-        - 債券価格上昇→金利低下→成長株に有利→TQQQ
-        - 債券価格下落→金利上昇→安全資産に有利→GLD
-        - 月次始値ベースで正確な計算
-        """)
-    
-    # CSV出力
-    st.markdown("---")
-    csv = display_df[['開始月', 'IEF信号(%)', '保有銘柄', '開始価格', '終了価格', '損益率(%)']].to_csv(index=False)
-    st.download_button(
-        label="📥 CSV形式でダウンロード",
-        data=csv,
-        file_name=f"momentum_backtest_{start_date}_{end_date}.csv",
-        mime="text/csv"
-    )
-    
     # フッター
     st.markdown("---")
-    with st.expander("ℹ️ 免責事項"):
+    with st.expander("ℹ️ yfinance統合について"):
         st.write("""
-        **免責事項**
+        **🚧 開発段階**
         
-        このアプリケーションは教育・研究目的で作成されています。
-        - 投資判断は自己責任で行ってください
-        - 過去のパフォーマンスは将来の結果を保証しません
-        - 現在はサンプルデータを使用しています
+        **Phase 1✅完了**: 基本データ取得機能
+        - yfinance接続テスト
+        - リアルタイム推奨銘柄判定
+        - エラーハンドリング
         
-        **次回アップデート**: リアルタイムデータ取得機能
+        **Phase 2✅完了**: モメンタム計算の完全実装
+        **Phase 3✅完了**: リアルデータでの完全バックテスト
+        **Phase 4（最終）**: 本番デプロイ
+        
+        現在のデータソース: {data_source}
         """)
     
-    st.markdown("🤖 **ETF Momentum Checker v1.0** | 📱 iPhone対応 | 🌐 Streamlit Cloud")
+    st.markdown("🤖 **ETF Momentum Checker v1.1-dev** | 📱 iPhone対応 | 🌐 yfinance統合")
 
 if __name__ == "__main__":
     main()
